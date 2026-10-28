@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Web to Android APK
 
 on:
   push:
@@ -6,28 +6,57 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-apk:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+      - name: Prepare Web Files & Capacitor
+        run: |
+          mkdir -p www
+          if [ -f "package.json" ]; then
+            npm install
+            npm run build || true
+            if [ -d "dist" ]; then cp -r dist/* www/;
+            elif [ -d "build" ]; then cp -r build/* www/;
+            else cp -r * www/ 2>/dev/null || true; fi
+          else
+            cp -r * www/ 2>/dev/null || true
+            npm init -y
+          fi
+          
+          # Agar index.html na ho toh fallback
+          if [ ! -f "www/index.html" ] && [ -f "index.html" ]; then
+            cp index.html www/
+          fi
+
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npx cap init "MyAIApp" "com.ai.studio.app" --web-dir www
+          npx cap add android
+          npx cap sync android
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: AI-Studio-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
           
